@@ -1,0 +1,47 @@
+# Data and embeddings (host on HuggingFace)
+/data/
+
+# Experiment outputs (checkpoints, logs, results)
+/exp/
+
+# Paper source (kept separate)
+/LoLM_Interspeech_2026/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+.ipynb_checkpoints/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Model checkpoints
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Compiled files
+*.npz
+*.npy
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Mypy
+.mypy_cache/
+
+# uv lock (optional: remove this line if you want to commit it)
+# uv.lock

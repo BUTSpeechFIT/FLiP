@@ -1,0 +1,23 @@
+# This config defines how to build a CountVectorizer for LoLM training
+
+name: en_unigram_mdf2
+language: en
+
+# Data sources (datasets.yaml)
+datasets: ["mcv_15_en_train"]
+text_id: text_en
+sim_threshold: 0.0  # Load only text transcripts whose text-speech cos. similarity score is above this threshold.
+
+# Tokenization
+token_pattern: latin      # latin or indic
+ngram_range: [1, 1]       # [min_n, max_n]
+lowercase: true           # 
+strip_accents: ascii      # null, ascii, or unicode
+
+# Vocabulary filtering
+max_features: -1        # -1 for unlimited
+min_df: 2               # int for count, float for ratio
+max_df: 1.0             # float ratio or int count
+
+
+

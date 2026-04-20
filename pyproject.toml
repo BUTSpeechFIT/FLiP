@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "FLiP"
+version = "0.1.0"
+description = "Factorized Linear Projection for Interpreting Multimodal Multilingual Sentence Embeddings"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "torch",
+    "torchaudio",
+    "numpy",
+    "tqdm",
+    "scikit-learn",
+    "matplotlib",
+    "rouge-score",
+    "transformers",
+    "datasets",
+    "sentencepiece",
+    "numpyencoder"
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchaudio = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.setuptools.packages.find]
+include = ["lolm*"]

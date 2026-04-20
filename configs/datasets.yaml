@@ -1,0 +1,59 @@
+mcv_15_en_train:
+  embeddings:
+  - id: text_en
+    file: data/cv_15/en/sonar_embeddings/train_text_embs.npy
+    modality: text
+    language: en
+  - id: speech_en
+    file: data/cv_15/en/sonar_embeddings/train_speech_embs.npy
+    modality: speech
+    language: en
+  texts:
+  - id: text_en
+    file: data/cv_15/en/sonar_embeddings/train_transcript.txt
+    language: en
+  sim_scores:
+  - file: data/cv_15/en/sonar_embeddings/train_sim_scores.npy
+    pair:
+    - text_en
+    - speech_en
+
+mcv_15_en_dev:
+  embeddings:
+  - id: text_en
+    file: data/cv_15/en/sonar_embeddings/dev_text_embs.npy
+    modality: text
+    language: en
+  - id: speech_en
+    file: data/cv_15/en/sonar_embeddings/dev_speech_embs.npy
+    modality: speech
+    language: en
+  texts:
+  - id: text_en
+    file: data/cv_15/en/sonar_embeddings/dev_transcript.txt
+    language: en
+  sim_scores:
+  - file: data/cv_15/en/sonar_embeddings/dev_sim_scores.npy
+    pair:
+    - text_en
+    - speech_en
+
+mcv_15_en_test:
+  embeddings:
+  - id: text_en
+    file: data/cv_15/en/sonar_embeddings/test_text_embs.npy
+    modality: text
+    language: en
+  - id: speech_en
+    file: data/cv_15/en/sonar_embeddings/test_speech_embs.npy
+    modality: speech
+    language: en
+  texts:
+  - id: text_en
+    file: data/cv_15/en/sonar_embeddings/test_transcript.txt
+    language: en
+  sim_scores:
+  - file: data/cv_15/en/sonar_embeddings/test_sim_scores.npy
+    pair:
+    - text_en
+    - speech_en

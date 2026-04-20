@@ -1,0 +1,67 @@
+# Example Training Configuration for Mozilla Common Voice 15 English
+# FactLoLM with rank 512
+
+experiment:
+  name: rank_512_alpha_0.5_l1_1e-4_l2_0
+  output_dir: exp/cv_15/en
+  seed: 108
+
+data:
+  train_datasets_yaml: configs/datasets.yaml
+  dev_datasets_yaml: configs/datasets.yaml
+  vocab_yaml: exp/cv_15/en_unigram_mdf2/vocab_config.yaml  # from build_cvect.py
+
+  train:
+    datasets:
+      - mcv_15_en_train
+    embedding_pair:
+      - text_en
+      - speech_en
+    target_text: text_en
+    sim_threshold: 0.0
+    normalize: null
+
+  validation:
+    datasets:
+      - mcv_15_en_dev
+    embedding_pair:
+      - text_en
+      - speech_en
+    target_text: text_en
+    sim_threshold: 0.0
+    normalize: null
+
+model:
+  type: FactLoLM
+  rank: 512
+  alpha: 0.5
+
+training:
+  batch_size: 6000
+  learning_rate: 0.005
+  lr_factor: 0.5
+  iterations: 100
+  num_workers: 0
+  checkpoint_interval: 3
+  patience: 5
+  early_stopping: true
+  stop_criteria: recall_avg
+  half_precision: false
+
+evaluation:
+  topk_factor: 2.0
+  use_bias: false
+
+regularization:
+  l1: 1e-4
+  l1_method: proximal
+  weight_decay: 0
+
+resume:
+  model_checkpoint: null
+  optimizer_checkpoint: null
+
+compute:
+  copy_to_tmp: false
+  tmp_dir: null
+  verbose: true
