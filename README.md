@@ -12,7 +12,7 @@ Under review:
 
 ---
 
-## Key results
+## Main results
 
 Keyword extraction accuracy (fraction of in-vocabulary reference tokens recovered) on Mozilla Common Voice English, SONAR embeddings:
 
