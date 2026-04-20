@@ -52,7 +52,7 @@ uv sync
 
 ## Data
 
-Preprocessed SONAR embeddings and transcripts for Mozilla Common Voice v15 (EN, DE, FR) and parallel text data (Europarl, Samanantar) are available on HuggingFace: [link TBD].
+Preprocessed SONAR embeddings and transcripts for Mozilla Common Voice v15 (EN, DE, FR) and parallel text data (Europarl, Samanantar) are available on HuggingFace: [BUT-FIT/FLiP-data](https://huggingface.co/datasets/BUT-FIT/FLiP-data).
 
 ---
 
