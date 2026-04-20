@@ -1,5 +1,5 @@
 
-# FLiP: Factorized Linear Projection for Interpreting Sentence Embeddings
+# FLiP: Factorized Linear Projection for Interpreting Multimodal Multilingual Sentence Embeddings
 
 FLiP is a diagnostic tool for interpreting pretrained sentence embedding spaces. It trains a factorized log-linear model to recover lexical content (keywords) from sentence embeddings via a single linear projection — no fine-tuning of the encoder, no heuristics.
 
