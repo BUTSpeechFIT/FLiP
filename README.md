@@ -8,6 +8,8 @@ Under review:
 > *FLiP: Towards understanding and interpreting multimodal multilingual sentence embeddings.*
 > Speech@FIT, Brno University of Technology.
 
+[Read the paper](paper/FLiP.pdf)
+
 ---
 
 ## Key results
@@ -99,11 +101,14 @@ Pass `--entities_jsonl` to evaluate named-entity recall. Pass `--add_bias` to in
 ## Citation
 
 ```bibtex
-@article{kesiraju2026flip,
-  title   = {{FLiP}: Towards understanding and interpreting multimodal multilingual sentence embeddings},
-  author  = {Kesiraju, Santosh and Yusuf, Bolaji and Sedl{\'{a}}{\v{c}}ek, {\v{S}}imon and Plchot, Old{\v{r}}ich and Schwarz, Petr},
-  journal = {arXiv preprint arXiv:2026.XXXXX},
-  year    = {2026},
+@misc{kesiraju2026flip,
+  title         = {{FLiP}: Towards understanding and interpreting multimodal multilingual sentence embeddings},
+  author        = {Kesiraju, Santosh and Yusuf, Bolaji and Sedl{\'{a}}{\v{c}}ek, {\v{S}}imon and Plchot, Old{\v{r}}ich and Schwarz, Petr},
+  year          = {2026},
+  eprint        = {2026.XXXXX},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL},
+  url           = {https://github.com/BUTSpeechFIT/FLiP},
 }
 ```
 
