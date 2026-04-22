@@ -8,6 +8,16 @@ version = "0.1.0"
 description = "Factorized Linear Projection for Interpreting Multimodal Multilingual Sentence Embeddings"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Santosh Kesiraju", email = "kesiraju@fit.vut.cz" },
+]
+keywords = ["sentence embeddings", "interpretability", "speech", "multilingual", "SONAR"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 
 dependencies = [
     "torch",
@@ -20,7 +30,8 @@ dependencies = [
     "transformers",
     "datasets",
     "sentencepiece",
-    "numpyencoder"
+    "numpyencoder",
+    "safetensors",
 ]
 
 [tool.uv.sources]
