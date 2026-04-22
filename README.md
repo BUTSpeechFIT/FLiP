@@ -7,6 +7,7 @@ Under review:
 > Santosh Kesiraju, Bolaji Yusuf, Simon Sedlacek, Oldrich Plchot, Petr Schwarz.
 > *FLiP: Towards understanding and interpreting multimodal multilingual sentence embeddings.*
 > Speech@FIT, Brno University of Technology.
+> arXiv: [2604.18109](https://arxiv.org/abs/2604.18109)
 
 [Read the paper](paper/FLiP.pdf)
 
@@ -50,6 +51,29 @@ uv sync
 
 ---
 
+## Trained checkpoints
+
+| HF repo | Training data | Embedding | Rank | Size |
+|---------|--------------|-----------|-----:|-----:|
+| [BUT-FIT/FLiP-en-sonar](https://huggingface.co/BUT-FIT/FLiP-en-sonar) → `mcv15/rank-512/` | MCV v15 EN | SONAR | 512 | 207 MB |
+| [BUT-FIT/FLiP-en-sonar](https://huggingface.co/BUT-FIT/FLiP-en-sonar) → `mcv15/rank-1024/` | MCV v15 EN | SONAR | 1024 | 414 MB |
+
+Download with the `hf` CLI:
+
+```bash
+hf download BUT-FIT/FLiP-en-sonar mcv15/rank-512/model.safetensors \
+                                   mcv15/rank-512/vocab.json \
+                                   mcv15/rank-512/config.json
+```
+
+Or clone the full repo:
+
+```bash
+git clone https://huggingface.co/BUT-FIT/FLiP-en-sonar
+```
+
+---
+
 ## Data
 
 Preprocessed SONAR embeddings and transcripts for Mozilla Common Voice v15 (EN) are available on HuggingFace: [BUT-FIT/FLiP-data](https://huggingface.co/datasets/BUT-FIT/FLiP-data).
@@ -86,13 +110,19 @@ python lolm/train.py --config configs/train_lolm.yaml \
 **3. Evaluate**
 
 ```
-python scripts/evaluate_simple.py \
-    --sdict exp/cv_15/en/rank_512_alpha_0.5_l1_1e-4_l2_0/checkpoints/model_state_dict_best_val_recall_avg.pt \
+python scripts/evaluate.py \
+    --sdict mcv15/rank-512/model.safetensors \
+    --vocab  mcv15/rank-512/vocab.json \
     --data_yaml configs/datasets.yaml \
     --dataset mcv_15_en_test \
     --text_id text_en \
-    --topn 10
+    --topn 10 \
+    --metrics all
 ```
+
+- For real-world applications, play with `--topn N` -- you may also plot precision-recall curves as a function of `N`.
+
+- To obtain accuracy pass `--metrics accuracy` -- here `--topn` does not matter because `n` is chosen based on in-vocab tokens per each sentence in the transcript.
 
 Pass `--entities_jsonl` to evaluate named-entity recall. Pass `--add_bias` to include the log-unigram prior in scoring. Pass `--save_details` to write per-document keyword results to JSON.
 
@@ -105,10 +135,10 @@ Pass `--entities_jsonl` to evaluate named-entity recall. Pass `--add_bias` to in
   title         = {{FLiP}: Towards understanding and interpreting multimodal multilingual sentence embeddings},
   author        = {Kesiraju, Santosh and Yusuf, Bolaji and Sedl{\'{a}}{\v{c}}ek, {\v{S}}imon and Plchot, Old{\v{r}}ich and Schwarz, Petr},
   year          = {2026},
-  eprint        = {2026.XXXXX},
+  eprint        = {2604.18109},
   archivePrefix = {arXiv},
   primaryClass  = {cs.CL},
-  url           = {https://github.com/BUTSpeechFIT/FLiP},
+  url           = {http://arxiv.org/abs/2604.18109},
 }
 ```
 

@@ -16,7 +16,7 @@ strip_accents: ascii      # null, ascii, or unicode
 
 # Vocabulary filtering
 max_features: 100_000   # -1 for unlimited
-min_df: 1.0             # int for count, float for ratio
+min_df: 1               # careful: int for count, float for ratio
 max_df: 1.0             # float ratio or int count
 
 

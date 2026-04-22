@@ -7,6 +7,7 @@ import logging
 import platform
 import torch
 from numpyencoder import NumpyEncoder
+from safetensors.torch import save_file
 
 
 def move_to_device(batch: dict, device) -> dict:
@@ -35,9 +36,23 @@ def load_json_gzip(fname):
 
 
 def save_ckpt(out_dir, sfx, model, opt):
-    """Save checkpoint as state_dict."""
-    torch.save(model.state_dict(), os.path.join(out_dir, f"model_state_dict_{sfx}.pt"))
+    """Save model checkpoint as safetensors and optimizer state as .pt."""
+
+    # Unwrap compiled model before saving
+    raw = getattr(model, "_orig_mod", model)
+    save_file(
+        raw.state_dict(), os.path.join(out_dir, f"model_state_dict_{sfx}.safetensors")
+    )
     torch.save(opt.state_dict(), os.path.join(out_dir, f"optim_state_dict_{sfx}.pt"))
+
+
+def load_model_ckpt(path, device="cpu"):
+    """Load a model state_dict from either .safetensors or legacy .pt format."""
+    if path.endswith(".safetensors"):
+        from safetensors.torch import load_file
+
+        return load_file(path, device=str(device))
+    return torch.load(path, map_location=device, weights_only=True)
 
 
 def get_num_params(model):

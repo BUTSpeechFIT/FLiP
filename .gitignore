@@ -45,3 +45,9 @@ env/
 
 # uv lock (optional: remove this line if you want to commit it)
 # uv.lock
+
+# HuggingFace upload scripts and staging artefacts (local only)
+push_to_hub.py
+upload_to_hf.py
+hf_dataset_card/
+scripts/convert_to_safetensors.py

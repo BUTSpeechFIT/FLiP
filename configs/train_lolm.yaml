@@ -9,7 +9,7 @@ experiment:
 data:
   train_datasets_yaml: configs/datasets.yaml
   dev_datasets_yaml: configs/datasets.yaml
-  vocab_yaml: exp/cv_15/en_unigram_mdf2/vocab_config.yaml  # from build_cvect.py
+  vocab_yaml: exp/cv_15/en_unigram_100k/vocab_config.yaml  # from build_cvect.py
 
   train:
     datasets:

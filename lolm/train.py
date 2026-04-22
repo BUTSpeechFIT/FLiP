@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 import numpy as np
 
-from lolm.utils import create_logger, get_num_params, save_ckpt, move_to_device
+from lolm.utils import create_logger, get_num_params, save_ckpt, load_model_ckpt, move_to_device
 from lolm.config import load_train_config
 from lolm.data.builders import build_embow_dataset_from_yaml
 from lolm.data.datasets import ebow_collator, IntraChunkSampler
@@ -445,7 +445,7 @@ def main():
     resume_cfg = config.get("resume", {})
     if resume_cfg.get("model_checkpoint"):
         logger.info("Loading model checkpoint: %s", resume_cfg["model_checkpoint"])
-        model.load_state_dict(torch.load(resume_cfg["model_checkpoint"]))
+        model.load_state_dict(load_model_ckpt(resume_cfg["model_checkpoint"], device))
 
     # Move to device and compile
     model.to(device)
@@ -471,7 +471,7 @@ def main():
             if resume_cfg.get("model_checkpoint"):
                 opt_path = resume_cfg["model_checkpoint"].replace(
                     "model_state_dict_", "optim_state_dict_"
-                )
+                ).replace(".safetensors", ".pt")
                 if os.path.exists(opt_path):
                     logger.info("Loading optimizer checkpoint: %s", opt_path)
                     opt.load_state_dict(torch.load(opt_path))
