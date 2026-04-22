@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate LoLM/FactLoLM keyword extraction using precision, recall, and entity metrics."""
+"""Evaluate FLiP based keyword extraction using accuracy, precision, recall, and entity metrics."""
 
 import os
 import json
@@ -12,7 +12,7 @@ from tqdm import tqdm
 import yaml
 
 from lolm.data.utils import get_int2vocab, load_data_and_embs, remove_punc
-from lolm.utils import create_logger
+from lolm.utils import create_logger, load_model_ckpt
 
 
 def load_entities_from_jsonl(jsonl_file):
@@ -187,7 +187,87 @@ def compute_entity_metrics(entity_names, keywords):
     }
 
 
-def extract_topn_keywords(E, embs, topn, batch_size, add_bias=False, b=None):
+def compute_accuracy_metrics(docs, all_kw_ixs, int2vocab, vocab_set, logger):
+    """Compute per-sentence accuracy with adaptive k (no deduplication).
+
+    For each sentence, k = number of in-vocabulary reference tokens.
+    Accuracy = fraction of in-vocab reference tokens found in top-k predictions
+    Sentences with no in-vocabulary tokens are skipped.
+
+    Args:
+        docs: List of document strings.
+        all_kw_ixs: List of LongTensors (sorted by score desc), one per document.
+        int2vocab: Dict mapping integer index to vocabulary word.
+        vocab_set: Set of all vocabulary words (lowercase).
+        logger: Logger instance.
+
+    Returns:
+        Tuple of (results list, summary dict).
+    """
+    accuracies = []
+    ks = []
+    n_skipped = 0
+    results = []
+
+    for i in tqdm(range(len(docs)), desc="Computing accuracy"):
+        ref_tokens = set(docs[i].lower().split())
+        in_vocab_ref = ref_tokens & vocab_set
+
+        if not in_vocab_ref:
+            n_skipped += 1
+            continue
+
+        k = len(in_vocab_ref)
+        pool = all_kw_ixs[i]
+        k_eff = min(k, len(pool))
+        selected = {int2vocab[pool[j].item()].lower() for j in range(k_eff)}
+
+        hits = in_vocab_ref & selected
+        accuracy = len(hits) / len(in_vocab_ref)
+        accuracies.append(accuracy)
+        ks.append(k)
+        results.append(
+            {
+                "doc": docs[i],
+                "accuracy": accuracy,
+                "n_hits": len(hits),
+                "n_in_vocab_ref": len(in_vocab_ref),
+                "n_oov": len(ref_tokens - vocab_set),
+                "k": k,
+            }
+        )
+
+    if not accuracies:
+        logger.warning("No sentences with in-vocabulary tokens found!")
+        return results, {
+            "accuracy": {"mean": 0.0},
+            "n_evaluated": 0,
+            "n_skipped": n_skipped,
+        }
+
+    arr = np.array(accuracies, dtype=np.float64)
+    n = len(arr)
+    summary = {
+        "n_evaluated": n,
+        "n_skipped": n_skipped,
+        "k_mean": round(float(np.mean(ks)), 2),
+        "accuracy": {
+            "mean": round(float(arr.mean()), 4),
+            "std": round(float(arr.std()), 4),
+            "se": round(float(arr.std() / np.sqrt(n)), 4),
+            "median": round(float(np.median(arr)), 4),
+            "min": round(float(arr.min()), 4),
+            "max": round(float(arr.max()), 4),
+        },
+    }
+
+    logger.info(json.dumps(summary))
+    print_accuracy_table(summary)
+
+    return results, summary
+
+
+def extract_topn_keywords(E, embs, topn, batch_size, basename, add_bias=False, b=None):
     """Extract top-N keyword indices for each document.
 
     Args:
@@ -195,6 +275,7 @@ def extract_topn_keywords(E, embs, topn, batch_size, add_bias=False, b=None):
         embs: Document embeddings as numpy array (n_docs x emb_dim).
         topn: Number of keywords to extract per document.
         batch_size: Number of documents processed per batch.
+        basename: the basename of embeddings
         add_bias: Whether to add the bias vector to scores.
         b: Bias vector (vocab_size x 1) on device; required if add_bias=True.
 
@@ -205,7 +286,9 @@ def extract_topn_keywords(E, embs, topn, batch_size, add_bias=False, b=None):
     embs_torch = torch.from_numpy(embs).to(device=device, dtype=E.dtype)
     all_kw_ixs = []
 
-    for start in tqdm(range(0, len(embs), batch_size), desc="Extracting keywords"):
+    for start in tqdm(
+        range(0, len(embs), batch_size), desc=f"Extracting keywords from: {basename}"
+    ):
         batch = embs_torch[start : start + batch_size]
         scores = E @ batch.T
         if add_bias and b is not None:
@@ -246,7 +329,7 @@ def evaluate_all(docs, all_kw_ixs, int2vocab, topn, logger, entity_names_list=No
     entity_metric_lists = {k: [] for k in entity_metric_keys}
 
     for i in tqdm(range(len(docs)), desc=f"Evaluating (topn={topn}, mode={eval_mode})"):
-        keywords = [int2vocab[ix.item()] for ix in all_kw_ixs[i]]
+        keywords = [int2vocab[ix.item()] for ix in all_kw_ixs[i][:topn]]
         metrics = compute_standard_metrics(docs[i], keywords)
 
         entity_names = entity_names_list[i] if has_entities else None
@@ -287,21 +370,21 @@ def evaluate_all(docs, all_kw_ixs, int2vocab, topn, logger, entity_names_list=No
             summary[key] = aggregate(entity_metric_lists[key])
 
     logger.info(json.dumps(summary))
-    _print_summary_table(summary, has_entities)
+    print_summary_table(summary, has_entities)
 
     return results, summary
 
 
-def _print_summary_table(summary, has_entities):
+def print_summary_table(summary, has_entities):
     """Print evaluation metrics in a compact table.
 
     Args:
         summary: Summary dict from evaluate_all.
         has_entities: Whether entity metrics are present in summary.
     """
-    print("\n" + "=" * 72)
-    print(f"EVALUATION MODE: {summary['evaluation_mode'].upper()}")
-    print("=" * 72)
+
+    print(f"Evaluation mode: {summary['evaluation_mode'].upper()}")
+    print("-" * 72)
     print(f"{'Metric':<26} {'Mean':>8} {'Std':>8} {'Min':>8} {'Max':>8}")
     print("-" * 72)
 
@@ -327,12 +410,32 @@ def _print_summary_table(summary, has_entities):
                 f"{label:<26} {m['mean']:>8.4f} {m['std']:>8.4f} {m['min']:>8.4f} {m['max']:>8.4f}"
             )
 
-    print("=" * 72)
+    print("-" * 72)
     print(f"Documents: {summary['n_documents']}  |  Top-N: {summary['topn']}")
-    print("=" * 72 + "\n")
+    print("-" * 72 + "\n")
 
 
-def _save_json(path, data):
+def print_accuracy_table(summary):
+    """Print accuracy metrics in a compact table."""
+
+    m = summary["accuracy"]
+    print("-" * 36)
+    print(f"  {'Metric':<20} {'Value':>8}")
+    print("-" * 36)
+    print(f"  {'Accuracy (mean)':<20} {m['mean']:>8.4f}")
+    print(f"  {'Accuracy (std)':<20} {m['std']:>8.4f}")
+    print(f"  {'Accuracy (se)':<20} {m['se']:>8.4f}")
+    print(f"  {'Accuracy (median)':<20} {m['median']:>8.4f}")
+    print(f"  {'Accuracy (min)':<20} {m['min']:>8.4f}")
+    print(f"  {'Accuracy (max)':<20} {m['max']:>8.4f}")
+    print("-" * 36)
+    print(f"  {'k (mean)':<20} {summary['k_mean']:>8.2f}")
+    print(f"  {'Evaluated':<20} {summary['n_evaluated']:>8d}")
+    print(f"  {'Skipped (all OOV)':<20} {summary['n_skipped']:>8d}")
+    print("-" * 36)
+
+
+def save_json(path, data):
     """Save data to a JSON file, converting numpy/tensor values automatically.
 
     Args:
@@ -351,7 +454,18 @@ def _save_json(path, data):
 
 
 def run_evaluation(
-    docs, embs, text_f, emb_f, basename, args, out_dir, int2vocab, E, b, logger
+    docs,
+    embs,
+    text_f,
+    emb_f,
+    basename,
+    args,
+    out_dir,
+    int2vocab,
+    vocab_set,
+    E,
+    b,
+    logger,
 ):
     """Run keyword extraction and evaluation for one embedding file.
 
@@ -364,25 +478,31 @@ def run_evaluation(
         args: Parsed argument namespace.
         out_dir: Output directory.
         int2vocab: Dict mapping index to vocabulary word.
+        vocab_set: Set of all vocabulary words (lowercase); used for accuracy.
         E: Projection matrix on device.
         b: Bias vector on device, or None.
         logger: Logger instance.
     """
-    # Build line-number index for entity matching
-    with open(text_f, "r", encoding="utf-8") as f:
-        original_lines = [remove_punc(line.strip()) for line in f]
+    do_pr = args.metrics in ("pr", "all")
+    do_acc = args.metrics in ("accuracy", "all")
 
+    # Build line-number index for entity matching (only needed for PR)
     doc_line_numbers = []
-    for doc in docs:
-        matched = False
-        for line_num, orig_line in enumerate(original_lines, 1):
-            if orig_line is not None and orig_line == doc.strip():
-                doc_line_numbers.append(line_num)
-                original_lines[line_num - 1] = None
-                matched = True
-                break
-        if not matched:
-            doc_line_numbers.append(None)
+    if do_pr and args.entities_jsonl:
+        with open(text_f, "r", encoding="utf-8") as f:
+            original_lines = [remove_punc(line.strip()) for line in f]
+        for doc in docs:
+            matched = False
+            for line_num, orig_line in enumerate(original_lines, 1):
+                if orig_line is not None and orig_line == doc.strip():
+                    doc_line_numbers.append(line_num)
+                    original_lines[line_num - 1] = None
+                    matched = True
+                    break
+            if not matched:
+                doc_line_numbers.append(None)
+    else:
+        doc_line_numbers = [None] * len(docs)
 
     # Optional sentence-length filtering
     if args.msl > 1 or args.xsl < 1000:
@@ -413,86 +533,114 @@ def run_evaluation(
         )
         logger.info("Loaded entities for %d documents", len(text_to_entities))
 
-    # Extract top-N keywords
+    # Determine pool size: must cover topn (for PR) and max adaptive k (for accuracy).
+    # extract_topk is the pool size for accuracy; topn is the count for PR.
+    pool_size = args.topn
+    if do_acc:
+        pool_size = max(pool_size, args.extract_topk)
+
     stime = time()
-    logger.info("Extracting top-%d keywords", args.topn)
+    logger.info("Extracting top-%d keyword pool", pool_size)
     all_kw_ixs = extract_topn_keywords(
-        E, embs, args.topn, args.batch_size, args.add_bias, b
+        E, embs, pool_size, args.batch_size, basename, args.add_bias, b
     )
     logger.info("Extraction completed in %.2fs", time() - stime)
 
-    pr_dir = os.path.join(out_dir, "precision_recall")
+    # Precision / Recall
+    if do_pr:
+        pr_dir = os.path.join(out_dir, "precision_recall")
 
-    # Standard evaluation
-    logger.info("Running standard evaluation")
-    results, summary = evaluate_all(docs, all_kw_ixs, int2vocab, args.topn, logger)
+        logger.info("Running precision/recall evaluation (topn=%d)", args.topn)
+        results, summary = evaluate_all(docs, all_kw_ixs, int2vocab, args.topn, logger)
 
-    if args.save_details:
-        _save_json(
-            os.path.join(pr_dir, f"{basename}_topn{args.topn}_results.json"),
-            results,
-        )
-    _save_json(
-        os.path.join(pr_dir, f"{basename}_topn{args.topn}_summary.json"),
-        {"config": vars(args), "metrics": summary},
-    )
-
-    # Entity evaluation (subset of docs that have entities)
-    if text_to_entities or line_to_entities:
-        entity_docs = []
-        entity_kw_ixs = []
-        entity_names_list = []
-
-        for i, doc in enumerate(docs):
-            doc_key = remove_punc(doc.strip()).lower()
-            if doc_key in text_to_entities:
-                entity_docs.append(doc)
-                entity_kw_ixs.append(all_kw_ixs[i])
-                entity_names_list.append(text_to_entities[doc_key])
-            elif (
-                doc_line_numbers[i] is not None
-                and doc_line_numbers[i] in line_to_entities
-            ):
-                entity_docs.append(doc)
-                entity_kw_ixs.append(all_kw_ixs[i])
-                entity_names_list.append(line_to_entities[doc_line_numbers[i]])
-
-        logger.info(
-            "Entity evaluation: %d / %d docs have entities",
-            len(entity_docs),
-            len(docs),
+        if args.save_details:
+            save_json(
+                os.path.join(pr_dir, f"{basename}_topn{args.topn}_results.json"),
+                results,
+            )
+        save_json(
+            os.path.join(pr_dir, f"{basename}_topn{args.topn}_summary.json"),
+            {"config": vars(args), "metrics": summary},
         )
 
-        if not entity_docs:
-            logger.warning("No documents with entities found - check text matching")
-            return
+        # Entity evaluation (subset of docs that have entities)
+        if text_to_entities or line_to_entities:
+            entity_docs = []
+            entity_kw_ixs = []
+            entity_names_list = []
 
-        entity_results, entity_summary = evaluate_all(
-            entity_docs,
-            entity_kw_ixs,
-            int2vocab,
-            args.topn,
-            logger,
-            entity_names_list=entity_names_list,
+            for i, doc in enumerate(docs):
+                doc_key = remove_punc(doc.strip()).lower()
+                if doc_key in text_to_entities:
+                    entity_docs.append(doc)
+                    entity_kw_ixs.append(all_kw_ixs[i])
+                    entity_names_list.append(text_to_entities[doc_key])
+                elif (
+                    doc_line_numbers[i] is not None
+                    and doc_line_numbers[i] in line_to_entities
+                ):
+                    entity_docs.append(doc)
+                    entity_kw_ixs.append(all_kw_ixs[i])
+                    entity_names_list.append(line_to_entities[doc_line_numbers[i]])
+
+            logger.info(
+                "Entity evaluation: %d / %d docs have entities",
+                len(entity_docs),
+                len(docs),
+            )
+
+            if entity_docs:
+                entity_results, entity_summary = evaluate_all(
+                    entity_docs,
+                    entity_kw_ixs,
+                    int2vocab,
+                    args.topn,
+                    logger,
+                    entity_names_list=entity_names_list,
+                )
+                if args.save_details:
+                    save_json(
+                        os.path.join(
+                            pr_dir, f"{basename}_topn{args.topn}_entity_results.json"
+                        ),
+                        entity_results,
+                    )
+                save_json(
+                    os.path.join(
+                        pr_dir, f"{basename}_topn{args.topn}_entity_summary.json"
+                    ),
+                    {
+                        "config": vars(args),
+                        "metrics": entity_summary,
+                        "n_entity_docs": len(entity_docs),
+                    },
+                )
+            else:
+                logger.warning("No documents with entities found - check text matching")
+
+    # Accuracy
+    if do_acc:
+        acc_dir = os.path.join(out_dir, "accuracy")
+        os.makedirs(acc_dir, exist_ok=True)
+
+        logger.info("Running accuracy evaluation (extract_topk=%d)", args.extract_topk)
+        acc_results, acc_summary = compute_accuracy_metrics(
+            docs, all_kw_ixs, int2vocab, vocab_set, logger
         )
 
         if args.save_details:
-            _save_json(
-                os.path.join(pr_dir, f"{basename}_topn{args.topn}_entity_results.json"),
-                entity_results,
+            save_json(
+                os.path.join(acc_dir, f"{basename}_accuracy_results.json"),
+                acc_results,
             )
-        _save_json(
-            os.path.join(pr_dir, f"{basename}_topn{args.topn}_entity_summary.json"),
-            {
-                "config": vars(args),
-                "metrics": entity_summary,
-                "n_entity_docs": len(entity_docs),
-            },
+        save_json(
+            os.path.join(acc_dir, f"{basename}_accuracy_summary.json"),
+            {"config": vars(args), "metrics": acc_summary},
         )
 
 
 def main():
-    """Main entry point."""
+    """Main method"""
     args = parse_arguments()
     stime = time()
 
@@ -502,7 +650,7 @@ def main():
     logger = create_logger(
         os.path.join(
             os.path.dirname(args.sdict),
-            f"../logs/eval_{args.text_id}_topn{args.topn}",
+            f"../logs/eval_{args.text_id}_{args.metrics}_topn{args.topn}",
         ),
         args.verbose,
     )
@@ -515,7 +663,7 @@ def main():
 
     # Load model checkpoint
     logger.info("Loading model checkpoint from %s", args.sdict)
-    ckpt = torch.load(args.sdict, map_location=device, weights_only=True)
+    ckpt = load_model_ckpt(args.sdict, device)
 
     # Extract projection matrix E (supports both compiled and non-compiled checkpoints)
     if "E" in ckpt:
@@ -539,9 +687,15 @@ def main():
         else:
             raise ValueError("Bias not found in checkpoint but --add_bias was set")
 
-    cvect_path = os.path.join(os.path.dirname(args.sdict), "../cvect.pkl")
-    int2vocab = get_int2vocab(cvect_path)
-    logger.info("Vocabulary size: %d", len(int2vocab))
+    ckpt_dir = os.path.dirname(args.sdict)
+    vocab_path = args.vocab or os.path.join(ckpt_dir, "../vocab.json")
+    if not os.path.exists(vocab_path):
+        raise FileNotFoundError(
+            f"vocab.json not found at {vocab_path}. Use --vocab to specify path."
+        )
+    int2vocab = get_int2vocab(vocab_path)
+    vocab_set = {w.lower() for w in int2vocab.values()}
+    logger.info("Vocabulary size: %d (from %s)", len(int2vocab), vocab_path)
 
     input_data = load_input_from_yaml(args.data_yaml, [args.dataset])
 
@@ -592,14 +746,26 @@ def main():
             ):
                 if args.out_base:
                     basename = args.out_base
-                    os.makedirs(
-                        os.path.join(out_dir, "precision_recall"), exist_ok=True
-                    )
                 else:
                     emb_base = os.path.basename(emb_f).replace(".npy", "")
                     basename = f"{dataset_name}/{emb_base}"
+
+                if args.metrics in ("pr", "all"):
                     os.makedirs(
-                        os.path.join(out_dir, "precision_recall", dataset_name),
+                        os.path.join(
+                            out_dir,
+                            "precision_recall",
+                            "" if args.out_base else dataset_name,
+                        ),
+                        exist_ok=True,
+                    )
+                if args.metrics in ("accuracy", "all"):
+                    os.makedirs(
+                        os.path.join(
+                            out_dir,
+                            "accuracy",
+                            "" if args.out_base else dataset_name,
+                        ),
                         exist_ok=True,
                     )
 
@@ -612,6 +778,7 @@ def main():
                     args,
                     out_dir,
                     int2vocab,
+                    vocab_set,
                     E,
                     b,
                     logger,
@@ -638,7 +805,12 @@ def parse_arguments():
     parser.add_argument(
         "--sdict",
         required=True,
-        help="Path to model checkpoint state_dict (.pt)",
+        help="Path to model checkpoint state_dict (.pt or .safetensors)",
+    )
+    parser.add_argument(
+        "--vocab",
+        default=None,
+        help="Path to vocab.json (default: ../vocab.json relative to --sdict)",
     )
     parser.add_argument(
         "--data_yaml",
@@ -666,10 +838,23 @@ def parse_arguments():
 
     # Evaluation parameters
     parser.add_argument(
+        "--metrics",
+        choices=["pr", "accuracy", "all"],
+        default="all",
+        help="Which metrics to compute: precision/recall ('pr'), accuracy, or both ('all')",
+    )
+    parser.add_argument(
         "--topn",
         type=int,
         default=20,
-        help="Number of keywords to extract per document",
+        help="Number of keywords to extract per document (used for PR)",
+    )
+    parser.add_argument(
+        "--extract_topk",
+        type=int,
+        default=200,
+        help="Candidate pool size for accuracy (adaptive-k evaluation). "
+        "Must be >= max reference length; ignored when --metrics pr.",
     )
     parser.add_argument(
         "--batch_size",
